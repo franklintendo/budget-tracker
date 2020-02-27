@@ -43,7 +43,7 @@ const FILES_TO_CACHE = [
   
   // fetch
   self.addEventListener("fetch", function(evt) {
-    if (evt.request.url.includes("/api/")) {
+    if (evt.request.url.includes("/api")) {
       evt.respondWith(
         caches.open(DATA_CACHE_NAME).then(cache => {
           return fetch(evt.request)
