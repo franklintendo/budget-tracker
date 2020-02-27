@@ -1,155 +1,153 @@
-const workoutTypeSelect = document.querySelector("#type");
-const cardioForm = document.querySelector(".cardio-form");
-const resistanceForm = document.querySelector(".resistance-form");
-const cardioNameInput = document.querySelector("#cardio-name");
-const nameInput = document.querySelector("#name");
-const weightInput = document.querySelector("#weight");
-const setsInput = document.querySelector("#sets");
-const repsInput = document.querySelector("#reps");
-const durationInput = document.querySelector("#duration");
-const resistanceDurationInput = document.querySelector("#resistance-duration");
-const distanceInput = document.querySelector("#distance");
-const completeButton = document.querySelector("button.complete");
-const addButton = document.querySelector("button.add-another");
-const toast = document.querySelector("#toast");
-const newWorkout = document.querySelector(".new-workout")
+let transactions = [];
+let myChart;
 
-let workoutType = null;
-let shouldNavigateAway = false;
+fetch("/api/transaction")
+  .then(response => {
+    return response.json();
+  })
+  .then(data => {
+    // save db data on global variable
+    transactions = data;
 
-init();
+    populateTotal();
+    populateTable();
+    populateChart();
+  });
 
-async function init() {
-  if (location.search.split("=")[1] === undefined) {
-    const workout = await API.getLastWorkout();
-    if(workout) {
-      location.search = "?id=" + workout._id;
-    }
-    else {
-      newWorkout.classList.add("")
-    }
-  }
+function populateTotal() {
+  // reduce transaction amounts to a single total value
+  let total = transactions.reduce((total, t) => {
+    return total + parseInt(t.value);
+  }, 0);
+
+  let totalEl = document.querySelector("#total");
+  totalEl.textContent = total;
 }
 
-function handleWorkoutTypeChange(event) {
-  workoutType = event.target.value;
+function populateTable() {
+  let tbody = document.querySelector("#tbody");
+  tbody.innerHTML = "";
 
-  if (workoutType === "cardio") {
-    cardioForm.classList.remove("d-none");
-    resistanceForm.classList.add("d-none");
-  } else if (workoutType === "resistance") {
-    resistanceForm.classList.remove("d-none");
-    cardioForm.classList.add("d-none");
-  } else {
-    cardioForm.classList.add("d-none");
-    resistanceForm.classList.add("d-none");
-  }
+  transactions.forEach(transaction => {
+    // create and populate a table row
+    let tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${transaction.name}</td>
+      <td>${transaction.value}</td>
+    `;
 
-  validateInputs();
-}
-
-function validateInputs() {
-  let isValid = true;
-
-  if (workoutType === "resistance") {
-    if (nameInput.value.trim() === "") {
-      isValid = false;
-    }
-
-    if (weightInput.value.trim() === "") {
-      isValid = false;
-    }
-
-    if (setsInput.value.trim() === "") {
-      isValid = false;
-    }
-
-    if (repsInput.value.trim() === "") {
-      isValid = false;
-    }
-
-    if (resistanceDurationInput.value.trim() === "") {
-      isValid = false;
-    }
-  } else if (workoutType === "cardio") {
-    if (cardioNameInput.value.trim() === "") {
-      isValid = false;
-    }
-
-    if (durationInput.value.trim() === "") {
-      isValid = false;
-    }
-
-    if (distanceInput.value.trim() === "") {
-      isValid = false;
-    }
-  }
-
-  if (isValid) {
-    completeButton.removeAttribute("disabled");
-    addButton.removeAttribute("disabled");
-  } else {
-    completeButton.setAttribute("disabled", true);
-    addButton.setAttribute("disabled", true);
-  }
-}
-
-async function handleFormSubmit(event) {
-  event.preventDefault();
-
-  let workoutData = {};
-
-  if (workoutType === "cardio") {
-    workoutData.type = "cardio";
-    workoutData.name = cardioNameInput.value.trim();
-    workoutData.distance = Number(distanceInput.value.trim());
-    workoutData.duration = Number(durationInput.value.trim());
-  } else if (workoutType === "resistance") {
-    workoutData.type = "resistance";
-    workoutData.name = nameInput.value.trim();
-    workoutData.weight = Number(weightInput.value.trim());
-    workoutData.sets = Number(setsInput.value.trim());
-    workoutData.reps = Number(repsInput.value.trim());
-    workoutData.duration = Number(resistanceDurationInput.value.trim());
-  }
-
-  await API.addExercise(workoutData);
-  clearInputs();
-  toast.classList.add("success");
-}
-
-function handleToastAnimationEnd() {
-  toast.removeAttribute("class");
-  if (shouldNavigateAway) {
-    location.href = "/";
-  }
-}
-
-function clearInputs() {
-  cardioNameInput.value = "";
-  nameInput.value = "";
-  setsInput.value = "";
-  distanceInput.value = "";
-  durationInput.value = "";
-  repsInput.value = "";
-  resistanceDurationInput.value = "";
-  weightInput.value = "";
-}
-
-if(workoutTypeSelect) {
-  workoutTypeSelect.addEventListener("change", handleWorkoutTypeChange);
-}
-if(completeButton) {
-  completeButton.addEventListener("click", function(event) {
-    shouldNavigateAway = true;
-    handleFormSubmit(event);
+    tbody.appendChild(tr);
   });
 }
-if(addButton) {
-  addButton.addEventListener("click", handleFormSubmit);
-}
-toast.addEventListener("animationend", handleToastAnimationEnd);
 
-document
-  .querySelectorAll("input")
-  .forEach(element => element.addEventListener("input", validateInputs));
+function populateChart() {
+  // copy array and reverse it
+  let reversed = transactions.slice().reverse();
+  let sum = 0;
+
+  // create date labels for chart
+  let labels = reversed.map(t => {
+    let date = new Date(t.date);
+    return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+  });
+
+  // create incremental values for chart
+  let data = reversed.map(t => {
+    sum += parseInt(t.value);
+    return sum;
+  });
+
+  // remove old chart if it exists
+  if (myChart) {
+    myChart.destroy();
+  }
+
+  let ctx = document.getElementById("myChart").getContext("2d");
+
+  myChart = new Chart(ctx, {
+    type: 'line',
+      data: {
+        labels,
+        datasets: [{
+            label: "Total Over Time",
+            fill: true,
+            backgroundColor: "#6666ff",
+            data
+        }]
+    }
+  });
+}
+
+function sendTransaction(isAdding) {
+  let nameEl = document.querySelector("#t-name");
+  let amountEl = document.querySelector("#t-amount");
+  let errorEl = document.querySelector(".form .error");
+
+  // validate form
+  if (nameEl.value === "" || amountEl.value === "") {
+    errorEl.textContent = "Missing Information";
+    return;
+  }
+  else {
+    errorEl.textContent = "";
+  }
+
+  // create record
+  let transaction = {
+    name: nameEl.value,
+    value: amountEl.value,
+    date: new Date().toISOString()
+  };
+
+  // if subtracting funds, convert amount to negative number
+  if (!isAdding) {
+    transaction.value *= -1;
+  }
+
+  // add to beginning of current array of data
+  transactions.unshift(transaction);
+
+  // re-run logic to populate ui with new record
+  populateChart();
+  populateTable();
+  populateTotal();
+  
+  // also send to server
+  fetch("/api/transaction", {
+    method: "POST",
+    body: JSON.stringify(transaction),
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json"
+    }
+  })
+  .then(response => {    
+    return response.json();
+  })
+  .then(data => {
+    if (data.errors) {
+      errorEl.textContent = "Missing Information";
+    }
+    else {
+      // clear form
+      nameEl.value = "";
+      amountEl.value = "";
+    }
+  })
+  .catch(err => {
+    // fetch failed, so save in indexed db
+    saveRecord(transaction);
+
+    // clear form
+    nameEl.value = "";
+    amountEl.value = "";
+  });
+}
+
+document.querySelector("#add-btn").onclick = function() {
+  sendTransaction(true);
+};
+
+document.querySelector("#sub-btn").onclick = function() {
+  sendTransaction(false);
+};
